@@ -65,7 +65,7 @@ def train(save_path, device="cpu"):
 
     pad_id = tokenizer.stoi['[PAD]']
     criterion = nn.CrossEntropyLoss(ignore_index=pad_id)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
     train_num = (train_x.size(0) + batch_size - 1) // batch_size
     num_training_steps = train_num * epochs
     num_warmup_steps = int(num_training_steps * 0.05)
