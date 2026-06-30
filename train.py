@@ -41,6 +41,7 @@ def load_data(json_path, tokenizer, device="cpu"):
     print(f"Data loaded successfully. Shape: {dataset_tensor.shape}, Device: {dataset_tensor.device}")
     return dataset_tensor, max_len
 
+
 def train(save_path, device="cpu"):
     tokenizer = Tokenizer()
     x, max_len = load_data('dataset/dataset.json', tokenizer, device=device)
@@ -48,7 +49,7 @@ def train(save_path, device="cpu"):
     train_size = int(data_size * 0.9)
     train_x = x[:train_size]
     val_x = x[train_size:]
-    batch_size = 128
+    batch_size = 256
     epochs = 10
 
     model = Transformer(
@@ -65,35 +66,39 @@ def train(save_path, device="cpu"):
     pad_id = tokenizer.stoi['[PAD]']
     criterion = nn.CrossEntropyLoss(ignore_index=pad_id)
     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4, weight_decay=0.01)
+    train_num = (train_x.size(0) + batch_size - 1) // batch_size
+    num_training_steps = train_num * epochs
+    num_warmup_steps = int(num_training_steps * 0.05)
+
+    def lr_lambda(current_step: int):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+        return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
+
+    scheduler = LambdaLR(optimizer, lr_lambda)
 
     for epoch in range(epochs):
         model.train()
-        train_num = (train_x.size(0) + batch_size - 1) // batch_size
         bar = tqdm(range(0, train_x.size(0), batch_size), desc=f"Epoch {epoch + 1}/{epochs} [Train]", total=train_num)
-
-        num_training_steps = train_num * epochs
-        num_warmup_steps = int(num_training_steps * 0.05)
-
-        def lr_lambda(current_step: int):
-            if current_step < num_warmup_steps:
-                return float(current_step) / float(max(1, num_warmup_steps))
-            progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
-            return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
-
-        scheduler = LambdaLR(optimizer, lr_lambda)
 
         for i in bar:
             batch_data = train_x[i: i + batch_size]
             x_batch = batch_data[:, :-1].contiguous()
             y_batch = batch_data[:, 1:].contiguous()
+
             optimizer.zero_grad()
             logits = model(x_batch)
             loss = criterion(logits.view(-1, logits.size(-1)), y_batch.view(-1))
             loss.backward()
+
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             scheduler.step()
-            bar.set_postfix({"Train Loss": f"{loss.item():.4f}"})
+
+            current_lr = scheduler.get_last_lr()[0]
+            bar.set_postfix({"Train Loss": f"{loss.item():.4f}", "LR": f"{current_lr:.2e}"})
+
         model.eval()
         val_loss = 0.0
         val_num = (val_x.size(0) + batch_size - 1) // batch_size
