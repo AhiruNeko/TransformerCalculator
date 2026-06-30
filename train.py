@@ -56,7 +56,7 @@ def load_data(json_path, tokenizer, max_len=None, device="cpu"):
 def train(save_path, device="cpu"):
     tokenizer = Tokenizer()
     max_len = 192
-    x, _ = load_data('dataset/dataset.json', tokenizer, device=device)
+    x, _ = load_data('dataset/dataset.json', tokenizer, device=device, max_len=max_len)
     data_size = x.size(0)
     train_size = int(data_size * 0.9)
     train_x = x[:train_size]

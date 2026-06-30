@@ -2,7 +2,7 @@ from Embedding import *
 
 
 class TransformerLayer(nn.Module):
-    def __init__(self, d_model, ffn_dim, num_heads, dropout=0.1, max_len=196):
+    def __init__(self, d_model, ffn_dim, num_heads, dropout=0.1, max_len=192):
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = d_model // num_heads

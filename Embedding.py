@@ -13,7 +13,7 @@ class TransformerEmbedding(nn.Module):
 
 
 class RotaryEmbedding(nn.Module):
-    def __init__(self, dim, max_len=512, base=10000):
+    def __init__(self, dim, max_len=192, base=10000):
         super().__init__()
         self.dim = dim
 
