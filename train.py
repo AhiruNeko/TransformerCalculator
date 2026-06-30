@@ -61,7 +61,7 @@ def train(save_path, device="cpu"):
     train_size = int(data_size * 0.9)
     train_x = x[:train_size]
     val_x = x[train_size:]
-    batch_size = 1024
+    batch_size = 512
     epochs = 40
 
     model = Transformer(
