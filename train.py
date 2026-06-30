@@ -8,43 +8,55 @@ from tqdm import tqdm
 from torch.optim.lr_scheduler import LambdaLR
 
 
-def load_data(json_path, tokenizer, device="cpu"):
+def load_data(json_path, tokenizer, max_len=None, device="cpu"):
     print(f"Loading dataset from: {json_path}")
     with open(json_path, 'r', encoding='utf-8') as f:
         raw_formulas = json.load(f)
 
-    raw_id_list = []
-    max_physical_len = 0
-
-    for formula_str in tqdm(raw_formulas, desc="Pre-scanning text to find max_len"):
-        ids = tokenizer.encode(formula_str, add_special_tokens=True)
-        raw_id_list.append(ids)
-
-        if len(ids) > max_physical_len:
-            max_physical_len = len(ids)
-
-    max_len = ((max_physical_len + 7) // 8) * 8
-    print(f"Original max len: {max_physical_len}, final max len = {max_len}")
     pad_id = tokenizer.stoi['[PAD]']
     all_ids = []
 
-    for ids in tqdm(raw_id_list, desc="Padding sequences to aligned max_len"):
-        if len(ids) < max_len:
-            padded_ids = ids + [pad_id] * (max_len - len(ids))
-        else:
-            padded_ids = ids[:max_len]
-        all_ids.append(padded_ids)
+    if max_len is None:
+        raw_id_list = []
+        max_physical_len = 0
+
+        for formula_str in tqdm(raw_formulas, desc="Pre-scanning text to find max_len"):
+            ids = tokenizer.encode(formula_str, add_special_tokens=True)
+            raw_id_list.append(ids)
+            if len(ids) > max_physical_len:
+                max_physical_len = len(ids)
+        max_len = ((max_physical_len + 7) // 8) * 8
+        print(f"Auto-detected max len: {max_physical_len} -> Aligned max len = {max_len}")
+        for ids in tqdm(raw_id_list, desc="Padding sequences"):
+            if len(ids) < max_len:
+                padded_ids = ids + [pad_id] * (max_len - len(ids))
+            else:
+                padded_ids = ids[:max_len]
+            all_ids.append(padded_ids)
+
+    else:
+        print(f"Using fixed max_len = {max_len}. Skipping pre-scanning.")
+        for formula_str in tqdm(raw_formulas, desc="Processing and padding sequences"):
+            ids = tokenizer.encode(formula_str, add_special_tokens=True)
+
+            if len(ids) < max_len:
+                padded_ids = ids + [pad_id] * (max_len - len(ids))
+            else:
+                padded_ids = ids[:max_len]
+            all_ids.append(padded_ids)
+
     dataset_tensor = torch.tensor(all_ids, dtype=torch.long)
     device = torch.device(device)
     dataset_tensor = dataset_tensor.to(device)
 
-    print(f"Data loaded successfully. Shape: {dataset_tensor.shape}, Device: {dataset_tensor.device}")
+    print(f"Data loaded successfully. Shape: {dataset_tensor.shape}, Device: {dataset_tensor.device}\n")
     return dataset_tensor, max_len
 
 
 def train(save_path, device="cpu"):
     tokenizer = Tokenizer()
-    x, max_len = load_data('dataset/dataset.json', tokenizer, device=device)
+    max_len = 192
+    x, _ = load_data('dataset/dataset.json', tokenizer, device=device)
     data_size = x.size(0)
     train_size = int(data_size * 0.9)
     train_x = x[:train_size]
@@ -54,7 +66,7 @@ def train(save_path, device="cpu"):
 
     model = Transformer(
         vocab_size=len(CHARS),
-        max_len=196,
+        max_len=max_len,
         d_model=512,
         ffn_dim=3072,
         num_heads=8,
