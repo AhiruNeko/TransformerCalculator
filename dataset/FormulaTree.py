@@ -27,8 +27,8 @@ class FormulaTree:
             power_range=(1, 2),
             operator_probabilities=None,
             operator_max_use=None,
-            bracket_probability=0.2,
-            skip_steps=0.1
+            bracket_probability=0,
+            skip_steps=0
     ):
         if operator_probabilities is None:
             operator_probabilities = [1 / len(OPERATORS) for _ in range(len(OPERATORS))]
@@ -96,37 +96,76 @@ class FormulaTree:
             self._update_operator_count(operator)
         self.insert_nums()
 
+    def _has_bracket_inside(self, node):
+        if node is None:
+            return False
+
+        if self._has_bracket_inside(node.left) or self._has_bracket_inside(node.right):
+            return True
+
+        char = node.char
+        left_char = node.left.char if node.left is not None else None
+        right_char = node.right.char if node.right is not None else None
+
+        if char in OPERATORS:
+
+            if left_char in OPERATORS and PRIORITY[char] > PRIORITY[left_char]:
+                return True
+            if right_char in OPERATORS:
+                if PRIORITY[char] >= PRIORITY[right_char]:
+                    return True
+
+            if left_char in OPERATORS and self._has_bracket_inside(node.right):
+                return True
+
+        if char == 'sqrt':
+            return True
+
+        return False
+
     def _in_order(self, node, s=''):
-        if node is not None:
-            char = node.char
-            left_char = node.left.char if node.left is not None else None
-            right_char = node.right.char if node.right is not None else None
+        if node is None:
+            return s
 
-            left_brackets = random.choices([True, False], weights=[self.bracket_probability, 1 - self.bracket_probability], k=1)[0]
-            if char in OPERATORS and left_char in OPERATORS and PRIORITY[char] > PRIORITY[left_char]:
+        char = node.char
+
+        right_has_any_brac = self._has_bracket_inside(node.right)
+
+        left_char = node.left.char if node.left is not None else None
+        right_char = node.right.char if node.right is not None else None
+
+        left_brackets = False
+        right_brackets = False
+
+        if char in OPERATORS:
+
+            if left_char in OPERATORS and PRIORITY[char] > PRIORITY[left_char]:
                 left_brackets = True
-            elif left_char not in OPERATORS:
-                left_brackets = False
-            s += '(' if left_brackets else ''
-            s = self._in_order(node.left, s)
-            s += ')' if left_brackets else ''
+            if right_char in OPERATORS:
+                if PRIORITY[char] >= PRIORITY[right_char]:
+                    right_brackets = True
 
-            if '-' in node.char and len(node.char) > 1 and self.steps > 0:
-                if s == '' or s[-1] == '(':
-                    s += random.choices([f'({node.char})', node.char], weights=[self.bracket_probability, 1 - self.bracket_probability], k=1)[0]
-                else:
-                    s += f'({node.char})'
+            if (right_brackets or right_has_any_brac) and left_char in OPERATORS:
+                left_brackets = True
+
+        if char == 'sqrt':
+            right_brackets = True
+
+        s += '(' if left_brackets else ''
+        s = self._in_order(node.left, s)
+        s += ')' if left_brackets else ''
+        if '-' in char and len(char) > 1:
+            if s == '' or s[-1] == '(':
+                s += char
             else:
-                s += node.char
+                s += f'({char})'
+        else:
+            s += char
 
-            right_brackets = random.choices([True, False], weights=[self.bracket_probability, 1 - self.bracket_probability], k=1)[0]
-            if char == 'sqrt' or (char in OPERATORS and right_char in OPERATORS and PRIORITY[char] >= PRIORITY[right_char]):
-                right_brackets = True
-            elif right_char not in OPERATORS:
-                right_brackets = False
-            s += '(' if right_brackets else ''
-            s = self._in_order(node.right, s)
-            s += ')' if right_brackets else ''
+        s += '(' if right_brackets else ''
+        s = self._in_order(node.right, s)
+        s += ')' if right_brackets else ''
+
         return s
 
     def in_order(self):

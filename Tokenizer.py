@@ -4,6 +4,8 @@ CHARS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
          '+', '-', '*', '/', '^', 'sqrt', '=',
          '(', ')', '[NAN]', '[BOS]', '[EOS]', '[PAD]', '[Q]', '[A]']
 
+import re
+
 
 class Tokenizer:
     def __init__(self):
@@ -17,23 +19,31 @@ class Tokenizer:
     def tokenize(self, text):
         return self.pattern.findall(text)
 
-    def encode(self, text, add_special_tokens=True, max_len=None):
-        if '=' in text and not text.endswith('='):
-            question, answer_part = text.split('=', 1)
-            answer = "=" + answer_part
+    def encode(self, text, add_special_tokens=True, max_len=None, is_training=True):
+        if is_training:
+            if '=' in text and not text.endswith('='):
+                question, answer_part = text.split('=', 1)
+                answer = "=" + answer_part
 
-            q_tokens = self.tokenize(question)
-            a_tokens = self.tokenize(answer)
+                q_tokens = self.tokenize(question)
+                a_tokens = self.tokenize(answer)
 
-            q_ids = [self.stoi[ch] for ch in q_tokens if ch in self.stoi]
-            a_ids = [self.stoi[ch] for ch in a_tokens if ch in self.stoi]
+                q_ids = [self.stoi[ch] for ch in q_tokens if ch in self.stoi]
+                a_ids = [self.stoi[ch] for ch in a_tokens if ch in self.stoi]
+                ids = [self.stoi['[Q]']] + q_ids + [self.stoi['[A]']] + a_ids
+            else:
+                tokens = self.tokenize(text)
+                ids = [self.stoi[ch] for ch in tokens if ch in self.stoi]
 
-            ids = [self.stoi['[Q]']] + q_ids + [self.stoi['[A]']] + a_ids
+            if add_special_tokens:
+                ids = [self.stoi['[BOS]']] + ids + [self.stoi['[EOS]']]
         else:
-            tokens = self.tokenize(text)
-            ids = [self.stoi[ch] for ch in tokens if ch in self.stoi]
-        if add_special_tokens:
-            ids = [self.stoi['[BOS]']] + ids + [self.stoi['[EOS]']]
+            q_tokens = self.tokenize(text)
+            q_ids = [self.stoi[ch] for ch in q_tokens if ch in self.stoi]
+            ids = [self.stoi['[Q]']] + q_ids + [self.stoi['[A]']]
+
+            if add_special_tokens:
+                ids = [self.stoi['[BOS]']] + ids
         if max_len is not None:
             if len(ids) < max_len:
                 ids += [self.stoi['[PAD]']] * (max_len - len(ids))
@@ -48,3 +58,7 @@ class Tokenizer:
 
     def __call__(self, text, **kwargs):
         return self.encode(text, **kwargs)
+
+if __name__ == '__main__':
+    tokenizer = Tokenizer()
+    print(tokenizer("1+1=2", add_special_tokens=True, is_training=False))

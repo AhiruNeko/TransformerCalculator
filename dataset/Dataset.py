@@ -14,8 +14,8 @@ class Dataset:
             power_range=(1, 2),
             operator_probabilities=None,
             operator_max_use=None,
-            bracket_probability=0.2,
-            skip_steps=0.1
+            bracket_probability=0,
+            skip_steps=0
     ):
         self.size = size
         self.chars = CHARS
