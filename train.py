@@ -49,23 +49,23 @@ def train(save_path, device="cpu"):
     train_size = int(data_size * 0.9)
     train_x = x[:train_size]
     val_x = x[train_size:]
-    batch_size = 256
+    batch_size = 512
     epochs = 10
 
     model = Transformer(
         vocab_size=len(CHARS),
         max_len=max_len,
-        d_model=256,
-        ffn_dim=1024,
+        d_model=512,
+        ffn_dim=2048,
         num_heads=8,
         dropout=0.1,
-        num_layers=6
+        num_layers=8
     )
     model.to(device)
 
     pad_id = tokenizer.stoi['[PAD]']
     criterion = nn.CrossEntropyLoss(ignore_index=pad_id)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=0.01)
     train_num = (train_x.size(0) + batch_size - 1) // batch_size
     num_training_steps = train_num * epochs
     num_warmup_steps = int(num_training_steps * 0.05)
