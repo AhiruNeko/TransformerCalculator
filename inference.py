@@ -6,7 +6,7 @@ import torch
 def load_model(path, device='cuda'):
     model = Transformer(
         vocab_size=len(CHARS),
-        max_len=144,
+        max_len=152,
         d_model=512,
         ffn_dim=2048,
         num_heads=8,

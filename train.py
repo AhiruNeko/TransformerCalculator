@@ -50,15 +50,15 @@ def train(save_path, device="cpu"):
     train_x = x[:train_size]
     val_x = x[train_size:]
     batch_size = 1024
-    epochs = 10
+    epochs = 40
 
     model = Transformer(
         vocab_size=len(CHARS),
-        max_len=max_len,
+        max_len=196,
         d_model=512,
-        ffn_dim=2048,
+        ffn_dim=3072,
         num_heads=8,
-        dropout=0.1,
+        dropout=0.05,
         num_layers=8
     )
     model.to(device)

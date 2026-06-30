@@ -1,30 +1,39 @@
 import torch
-from torch import nn
-import math
-
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=5000):
-        super(PositionalEncoding, self).__init__()
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe.unsqueeze(0))
-
-    def forward(self, x):
-        x = x + self.pe[:, :x.size(1)]
-        return x
+import torch.nn as nn
 
 class TransformerEmbedding(nn.Module):
-    def __init__(self, vocab_size, d_model, max_len=128):
+    def __init__(self, vocab_size, d_model):
         super().__init__()
         self.token_emb = nn.Embedding(vocab_size, d_model)
-        self.pos_emb = PositionalEncoding(d_model, max_len)
         self.dropout = nn.Dropout(p=0.1)
 
     def forward(self, x):
         out = self.token_emb(x)
-        out = self.pos_emb(out)
         return self.dropout(out)
+
+
+class RotaryEmbedding(nn.Module):
+    def __init__(self, dim, max_len=512, base=10000):
+        super().__init__()
+        self.dim = dim
+
+        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+        t = torch.arange(max_len, dtype=torch.float32)
+        freqs = torch.outer(t, self.inv_freq)
+        emb = torch.cat((freqs, freqs), dim=-1)
+
+        self.register_buffer("cos_cached", emb.cos(), persistent=False)
+        self.register_buffer("sin_cached", emb.sin(), persistent=False)
+
+    def _rotate_half(self, x):
+        x1 = x[..., :self.dim // 2]
+        x2 = x[..., self.dim // 2:]
+        return torch.cat((-x2, x1), dim=-1)
+
+    def forward(self, x):
+        seq_len = x.size(1)
+        cos = self.cos_cached[:seq_len, :].unsqueeze(0)
+        sin = self.sin_cached[:seq_len, :].unsqueeze(0)
+        return (x * cos) + (self._rotate_half(x) * sin)
