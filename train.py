@@ -46,10 +46,7 @@ def load_data(json_path, tokenizer, max_len=None, device="cpu"):
             all_ids.append(padded_ids)
 
     dataset_tensor = torch.tensor(all_ids, dtype=torch.long)
-    device = torch.device(device)
-    dataset_tensor = dataset_tensor.to(device)
-
-    print(f"Data loaded successfully. Shape: {dataset_tensor.shape}, Device: {dataset_tensor.device}\n")
+    print(f"Data loaded successfully. Shape: {dataset_tensor.shape}\n")
     return dataset_tensor, max_len
 
 
@@ -59,10 +56,11 @@ def train(save_path, device="cpu"):
     x, _ = load_data('dataset/dataset.json', tokenizer, device=device, max_len=max_len)
     data_size = x.size(0)
     train_size = int(data_size * 0.9)
+
     train_x = x[:train_size]
     val_x = x[train_size:]
     batch_size = 512
-    epochs = 10
+    epochs = 50
 
     model = Transformer(
         vocab_size=len(CHARS),
@@ -77,7 +75,8 @@ def train(save_path, device="cpu"):
 
     pad_id = tokenizer.stoi['[PAD]']
     criterion = nn.CrossEntropyLoss(ignore_index=pad_id)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4, weight_decay=0.01)
+
     train_num = (train_x.size(0) + batch_size - 1) // batch_size
     num_training_steps = train_num * epochs
     num_warmup_steps = int(num_training_steps * 0.1)
@@ -88,22 +87,39 @@ def train(save_path, device="cpu"):
         num_training_steps=num_training_steps,
     )
 
+    amp_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    print(f"Using Mixed Precision Dtype: {amp_dtype}")
+    scaler = torch.cuda.amp.GradScaler(enabled=(amp_dtype == torch.float16))
+
+    best_val_acc = 0.0
+    patience = 3
+    patience_counter = 0
+
     for epoch in range(epochs):
         model.train()
         bar = tqdm(range(0, train_x.size(0), batch_size), desc=f"Epoch {epoch + 1}/{epochs} [Train]", total=train_num)
 
         for i in bar:
-            batch_data = train_x[i: i + batch_size]
+            batch_data = train_x[i: i + batch_size].to(device)
             x_batch = batch_data[:, :-1].contiguous()
             y_batch = batch_data[:, 1:].contiguous()
 
             optimizer.zero_grad()
-            logits = model(x_batch)
-            loss = criterion(logits.view(-1, logits.size(-1)), y_batch.view(-1))
-            loss.backward()
+            with torch.cuda.amp.autocast(device_type="cuda", dtype=amp_dtype):
+                logits = model(x_batch)
+                loss = criterion(logits.view(-1, logits.size(-1)), y_batch.view(-1))
 
-            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
+            if amp_dtype == torch.float16:
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
+
             scheduler.step()
 
             current_lr = scheduler.get_last_lr()[0]
@@ -118,12 +134,14 @@ def train(save_path, device="cpu"):
 
         with torch.no_grad():
             for i in range(0, val_x.size(0), batch_size):
-                batch_data = val_x[i: i + batch_size]
+                batch_data = val_x[i: i + batch_size].to(device)
                 x_batch = batch_data[:, :-1].contiguous()
                 y_batch = batch_data[:, 1:].contiguous()
 
-                logits = model(x_batch)
-                loss = criterion(logits.view(-1, logits.size(-1)), y_batch.view(-1))
+                with torch.cuda.amp.autocast(device_type="cuda", dtype=amp_dtype):
+                    logits = model(x_batch)
+                    loss = criterion(logits.view(-1, logits.size(-1)), y_batch.view(-1))
+
                 val_loss += loss.item()
                 preds = torch.argmax(logits, dim=-1)
                 non_pad_mask = (y_batch != pad_id)
@@ -136,10 +154,24 @@ def train(save_path, device="cpu"):
 
         print(f"Epoch {epoch + 1} Val:")
         print(f"Val Avg Loss: {avg_val_loss:.4f}")
-        print(f"Token Acc: {val_acc:.2f}%\n")
+        print(f"Token Acc: {val_acc:.2f}%")
 
-    torch.save(model.state_dict(), f"{save_path}")
-    print(f"Model saved as {save_path}")
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            patience_counter = 0
+            torch.save(model.state_dict(), save_path)
+            print(f"Best Model Found! Saved to {save_path} (Best Acc: {best_val_acc:.2f}%)")
+        else:
+            patience_counter += 1
+            print(f"EarlyStopping Counter: {patience_counter}/{patience}")
+        print("-" * 30 + "\n")
+        if patience_counter >= patience:
+            print(
+                f"[Early Stopping] Patience: {patience}")
+            break
+
+    print(f"Best Validation Accuracy: {best_val_acc:.2f}%")
+
 
 if __name__ == "__main__":
-    train("./model.pth", device="cuda")
+    train("./best_model.pth", device="cuda")
