@@ -45,7 +45,7 @@ def load_data(json_path, tokenizer, max_len=None, device="cpu"):
                 padded_ids = ids[:max_len]
             all_ids.append(padded_ids)
 
-    dataset_tensor = torch.tensor(all_ids, dtype=torch.long)
+    dataset_tensor = torch.tensor(all_ids, dtype=torch.long).to(device)
     print(f"Data loaded successfully. Shape: {dataset_tensor.shape}\n")
     return dataset_tensor, max_len
 
@@ -105,7 +105,7 @@ def train(save_path, device="cpu"):
             y_batch = batch_data[:, 1:].contiguous()
 
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast(device_type="cuda", dtype=amp_dtype):
+            with torch.cuda.amp.autocast(dtype=amp_dtype):
                 logits = model(x_batch)
                 loss = criterion(logits.view(-1, logits.size(-1)), y_batch.view(-1))
 
@@ -138,7 +138,7 @@ def train(save_path, device="cpu"):
                 x_batch = batch_data[:, :-1].contiguous()
                 y_batch = batch_data[:, 1:].contiguous()
 
-                with torch.cuda.amp.autocast(device_type="cuda", dtype=amp_dtype):
+                with torch.cuda.amp.autocast(dtype=amp_dtype):
                     logits = model(x_batch)
                     loss = criterion(logits.view(-1, logits.size(-1)), y_batch.view(-1))
 
