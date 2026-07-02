@@ -105,7 +105,7 @@ def train(save_path, device="cpu"):
             y_batch = batch_data[:, 1:].contiguous()
 
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast(dtype=amp_dtype):
+            with torch.amp.autocast('cuda', dtype=amp_dtype):
                 logits = model(x_batch)
                 loss = criterion(logits.view(-1, logits.size(-1)), y_batch.view(-1))
 
@@ -138,7 +138,7 @@ def train(save_path, device="cpu"):
                 x_batch = batch_data[:, :-1].contiguous()
                 y_batch = batch_data[:, 1:].contiguous()
 
-                with torch.cuda.amp.autocast(dtype=amp_dtype):
+                with torch.amp.autocast('cuda', dtype=amp_dtype):
                     logits = model(x_batch)
                     loss = criterion(logits.view(-1, logits.size(-1)), y_batch.view(-1))
 
@@ -160,7 +160,7 @@ def train(save_path, device="cpu"):
             best_val_acc = val_acc
             patience_counter = 0
             torch.save(model.state_dict(), save_path)
-            print(f"Best Model Found! Saved to {save_path} (Best Acc: {best_val_acc:.2f}%)")
+            print(f"Best Model Found. Saved to {save_path} (Best Acc: {best_val_acc:.2f}%)")
         else:
             patience_counter += 1
             print(f"EarlyStopping Counter: {patience_counter}/{patience}")
