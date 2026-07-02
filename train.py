@@ -1,3 +1,5 @@
+from transformers import get_cosine_schedule_with_warmup
+
 from Transformer import Transformer
 from Tokenizer import Tokenizer, CHARS
 import math
@@ -77,18 +79,16 @@ def train(save_path, device="cpu"):
 
     pad_id = tokenizer.stoi['[PAD]']
     criterion = nn.CrossEntropyLoss(ignore_index=pad_id)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-4, weight_decay=0.01)
     train_num = (train_x.size(0) + batch_size - 1) // batch_size
     num_training_steps = train_num * epochs
     num_warmup_steps = int(num_training_steps * 0.05)
 
-    def lr_lambda(current_step: int):
-        if current_step < num_warmup_steps:
-            return float(current_step) / float(max(1, num_warmup_steps))
-        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
-        return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
-
-    scheduler = LambdaLR(optimizer, lr_lambda)
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=num_warmup_steps,
+        num_training_steps=num_training_steps,
+    )
 
     for epoch in range(epochs):
         model.train()
@@ -106,11 +106,11 @@ def train(save_path, device="cpu"):
 
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
+            scheduler.step()
 
             current_lr = scheduler.get_last_lr()[0]
             bar.set_postfix({"Train Loss": f"{loss.item():.4f}", "LR": f"{current_lr:.2e}"})
 
-        scheduler.step()
         model.eval()
         val_loss = 0.0
         val_num = (val_x.size(0) + batch_size - 1) // batch_size
