@@ -106,11 +106,11 @@ def train(save_path, device="cpu"):
 
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-            scheduler.step()
 
             current_lr = scheduler.get_last_lr()[0]
             bar.set_postfix({"Train Loss": f"{loss.item():.4f}", "LR": f"{current_lr:.2e}"})
 
+        scheduler.step()
         model.eval()
         val_loss = 0.0
         val_num = (val_x.size(0) + batch_size - 1) // batch_size
