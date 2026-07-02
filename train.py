@@ -62,7 +62,7 @@ def train(save_path, device="cpu"):
     train_x = x[:train_size]
     val_x = x[train_size:]
     batch_size = 512
-    epochs = 40
+    epochs = 10
 
     model = Transformer(
         vocab_size=len(CHARS),
